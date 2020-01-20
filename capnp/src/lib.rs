@@ -27,9 +27,6 @@
 //! [capnpc-rust](https://github.com/capnproto/capnproto-rust/capnpc) crate.
 #![cfg_attr(feature = "rpc_try", feature(try_trait))]
 
-#[cfg(any(feature="quickcheck", test))]
-extern crate quickcheck;
-
 pub mod any_pointer;
 pub mod any_pointer_list;
 pub mod capability;
@@ -50,13 +47,13 @@ pub mod text;
 pub mod text_list;
 pub mod traits;
 
-/// Eight bytes of memory with opaque interior.
 ///
-/// This type is used to ensure that the data of a message is properly aligned.
+/// An 8-byte aligned value.
+///
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(C, align(8))]
 pub struct Word {
-    raw_content: [u8; 8],
+    raw_content: [u8; 8]
 }
 
 ///
@@ -67,43 +64,26 @@ pub const fn word(b0: u8, b1: u8, b2: u8, b3: u8, b4: u8, b5: u8, b6: u8, b7: u8
 }
 
 impl Word {
-    /// Does this, but faster:
-    /// `::std::iter::repeat(Word(0)).take(length).collect()`
+    /// Does this, but faster: `vec![word(0,0,0,0,0,0,0,0); length]`.
     pub fn allocate_zeroed_vec(length: usize) -> Vec<Word> {
-        let mut result : Vec<Word> = Vec::with_capacity(length);
+        let mut result: Vec<Word> = Vec::with_capacity(length);
         unsafe {
             result.set_len(length);
-            let p : *mut u8 = result.as_mut_ptr() as *mut u8;
-            ::std::ptr::write_bytes(p, 0u8, length * ::std::mem::size_of::<Word>());
+            let p: *mut u8 = result.as_mut_ptr() as *mut u8;
+            std::ptr::write_bytes(p, 0u8, length * std::mem::size_of::<Word>());
         }
         result
     }
 
-    /// Converts a byte slice into a `Word` slice. Unsafe due to possible alignment issues.
-    /// Only call this if you know that either
-    ///    1. `bytes.to_ptr()` falls on an eight-byte boundary, or
-    ///    2. your processor is okay with unaligned reads.
-    pub unsafe fn bytes_to_words<'a>(bytes: &'a [u8]) -> &'a [Word] {
-        ::std::slice::from_raw_parts(bytes.as_ptr() as *const Word, bytes.len() / 8)
-    }
-
-    /// Converts a mutable byte slice into a mutable `Word` slice. Unsafe due to possible
-    /// alignment issues. Only call this if you know that either
-    ///    1. `bytes.to_ptr()` falls on an eight-byte boundary, or
-    ///    2. your processor is okay with unaligned reads and writes
-    pub unsafe fn bytes_to_words_mut<'a>(bytes: &'a mut [u8]) -> &'a mut [Word] {
-        ::std::slice::from_raw_parts_mut(bytes.as_ptr() as *mut Word, bytes.len() / 8)
-    }
-
     pub fn words_to_bytes<'a>(words: &'a [Word]) -> &'a [u8] {
         unsafe {
-            ::std::slice::from_raw_parts(words.as_ptr() as *const u8, words.len() * 8)
+            std::slice::from_raw_parts(words.as_ptr() as *const u8, words.len() * 8)
         }
     }
 
     pub fn words_to_bytes_mut<'a>(words: &'a mut [Word]) -> &'a mut [u8] {
         unsafe {
-            ::std::slice::from_raw_parts_mut(words.as_mut_ptr() as *mut u8, words.len() * 8)
+            std::slice::from_raw_parts_mut(words.as_mut_ptr() as *mut u8, words.len() * 8)
         }
     }
 }
@@ -112,13 +92,13 @@ impl Word {
 impl quickcheck::Arbitrary for Word {
     fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Word {
         crate::word(quickcheck::Arbitrary::arbitrary(g),
-               quickcheck::Arbitrary::arbitrary(g),
-               quickcheck::Arbitrary::arbitrary(g),
-               quickcheck::Arbitrary::arbitrary(g),
-               quickcheck::Arbitrary::arbitrary(g),
-               quickcheck::Arbitrary::arbitrary(g),
-               quickcheck::Arbitrary::arbitrary(g),
-               quickcheck::Arbitrary::arbitrary(g))
+                    quickcheck::Arbitrary::arbitrary(g),
+                    quickcheck::Arbitrary::arbitrary(g),
+                    quickcheck::Arbitrary::arbitrary(g),
+                    quickcheck::Arbitrary::arbitrary(g),
+                    quickcheck::Arbitrary::arbitrary(g),
+                    quickcheck::Arbitrary::arbitrary(g),
+                    quickcheck::Arbitrary::arbitrary(g))
     }
 }
 
@@ -260,13 +240,13 @@ impl ::std::error::Error for Error {
 /// Helper struct that allows `MessageBuilder::get_segments_for_output()` to avoid heap allocations
 /// in the single-segment case.
 pub enum OutputSegments<'a> {
-    SingleSegment([&'a [Word]; 1]),
-    MultiSegment(Vec<&'a [Word]>),
+    SingleSegment([&'a [u8]; 1]),
+    MultiSegment(Vec<&'a [u8]>),
 }
 
 impl <'a> ::std::ops::Deref for OutputSegments<'a> {
-    type Target = [&'a [Word]];
-    fn deref<'b>(&'b self) -> &'b [&'a [Word]] {
+    type Target = [&'a [u8]];
+    fn deref<'b>(&'b self) -> &'b [&'a [u8]] {
         match *self {
             OutputSegments::SingleSegment(ref s) => {
                 s
@@ -279,7 +259,7 @@ impl <'a> ::std::ops::Deref for OutputSegments<'a> {
 }
 
 impl<'s> message::ReaderSegments for OutputSegments<'s> {
-    fn get_segment<'a>(&'a self, id: u32) -> Option<&'a [Word]> {
+    fn get_segment<'a>(&'a self, id: u32) -> Option<&'a [u8]> {
         match *self {
             OutputSegments::SingleSegment(ref s) => {
                 s.get(id as usize).map(|slice| *slice)
